@@ -1,13 +1,10 @@
-import sys
+import sys, os, requests
 
 from PyQt5.QtWidgets import QApplication, QWidget, QPushButton
 from PyQt5.QtWidgets import QLabel, QLineEdit
-from io import BytesIO
-# Этот класс поможет нам сделать картинку из потока байт
+from PyQt5.QtGui import QPixmap
 
-import requests
-from PIL import Image
-
+URL = "http://static-maps.yandex.ru/1.x"
 
 class Example(QWidget):
     def __init__(self):
@@ -15,82 +12,59 @@ class Example(QWidget):
         self.initUI()
 
     def initUI(self):
-        self.setGeometry(300, 300, 400, 400)
-        self.setWindowTitle('Шестая программа')
+        self.setGeometry(300, 300, 400, 425)
+        self.setWindowTitle('Часть 1')
 
         self.btn = QPushButton('Сформировать карту', self)
         self.btn.resize(self.btn.sizeHint())
-        self.btn.move(100, 150)
-        self.btn.clicked.connect(self.hello)
+        self.btn.move(100, 100)
+        self.btn.clicked.connect(self.getImage)
 
         self.label = QLabel(self)
-        self.label.setText("Укажите координаты: ")
-        self.label.move(30, 30)
-        self.name_input1 = QLineEdit(self)
-        self.name_input1.move(150, 30)
+        self.label.setText("Укажите координаты")
+        self.label.move(20, 10)
 
         self.name_label = QLabel(self)
-        self.name_label.setText("Укажите масштаб: ")
-        self.name_label.move(45, 90)
+        self.name_label.setText("Укажите масштаб")
+        self.name_label.move(20, 70)
 
-        self.name_input2 = QLineEdit(self)
-        self.name_input2.move(150, 90)
+        self.longitude = QLineEdit(self)
+        self.longitude.move(170, 10)
+        self.latitude = QLineEdit(self)
+        self.latitude.move(170, 30)
+        self.scale = QLineEdit(self)
+        self.scale.move(170, 70)
 
-    def hello(self):
-        name1 = self.name_input1.text()
-        name2 = self.name_input2.text()
-        search_api_server = "https://search-maps.yandex.ru/v1/"
-        api_key = "dda3ddba-c9ea-4ead-9010-f43fbc15c6e3"
+        self.image = QLabel(self)
+        self.image.move(0, 125)
+        self.image.resize(400, 300)
 
-        p = name1.split()
-        address_ll = p[0] + "," + p[1]
-
-        search_params = {
-            "apikey": api_key,
-            "text": "аптека",
-            "lang": "ru_RU",
-            "ll": address_ll,
-            "type": "biz"
+    def getImage(self):
+        params = {
+        "ll": f"{self.longitude.text()},{self.latitude.text()}",
+        "spn": f"{self.scale.text()},{self.scale.text()}",
+        "l": "map",
+        "size": "400,300"
         }
+        response = requests.get(URL, params=params)
 
-        response = requests.get(search_api_server, params=search_params)
         if not response:
-            # ...
-            pass
+            print("Ошибка выполнения запроса:")
+            print("Http статус:", response.status_code, "(", response.reason, ")")
+            sys.exit(1)
 
-        # Преобразуем ответ в json-объект
-        json_response = response.json()
+    # Запишем полученное изображение в файл.
+        self.map_file = "map.png"
+        with open(self.map_file, "wb") as file:
+            file.write(response.content)
 
-        # Получаем первую найденную организацию.
-        organization = json_response["features"][0]
-        # Название организации.
-        org_name = organization["properties"]["CompanyMetaData"]["name"]
-        # Адрес организации.
-        org_address = organization["properties"]["CompanyMetaData"]["address"]
+        ## Изображение
+        self.pixmap = QPixmap(self.map_file)
+        self.image.setPixmap(self.pixmap)
 
-        # Получаем координаты ответа.
-        point = organization["geometry"]["coordinates"]
-        org_point = "{0},{1}".format(point[0], point[1])
-        delta = name2
-
-        # Собираем параметры для запроса к StaticMapsAPI:
-        map_params = {
-            # позиционируем карту центром на наш исходный адрес
-            "ll": address_ll,
-            "spn": ",".join([delta, delta]),
-            "l": "map",
-            # добавим точку, чтобы указать найденную аптеку
-            "pt": "{0},pm2dgl".format(org_point)
-        }
-
-        map_api_server = "http://static-maps.yandex.ru/1.x/"
-        # ... и выполняем запрос
-        response = requests.get(map_api_server, params=map_params)
-
-        Image.open(BytesIO(
-            response.content)).show()
-
-
+    def closeEvent(self, event):
+        """При закрытии формы подчищаем за собой"""
+        os.remove(self.map_file)
 if __name__ == '__main__':
     app = QApplication(sys.argv)
     ex = Example()
